@@ -17,13 +17,13 @@ function [] = babble_daspnet_multi(id, newT, reinforcer, yoke, plotOn)
 %   Example of Use:
 %   babble_daspnet_multi('Mortimer', 7200, 'relhisal', false, false);
 %
-%   For updates, see https://github.com/AnneSWarlaumont/BabbleNN
+%   For updates, see https://github.com/tim-shea/BabbleNN
 
 % Initialization
 rng shuffle;
 
-salthresh = 25;             % Initial salience value for reward (used in 'relhisal' reinforcment)
-DAinc = 1;                  % Amount of dopamine given during reward
+salthresh = 15;             % Initial salience value for reward (used in 'relhisal' reinforcment)
+DAinc = 0.1;                  % Amount of dopamine given during reward
 sm = 4;                     % Maximum synaptic weight
 testint = 1;                % Number of seconds between vocalizations
 
@@ -81,14 +81,15 @@ else
     
     M=100;                 % number of synapses per neuron
     D=1;                   % maximal conduction delay
-    % excitatory neurons   % inhibitory neurons      % total number
-    Ne=1600;                Ni=400;                   N=Ne+Ni;
     
     numberOfMuscles = 7;
     numberOfGroups = 2 * numberOfMuscles;
     groupSize = 100;
     Nout = groupSize * numberOfGroups;
     Nmot = Nout;
+    
+    % excitatory neurons   % inhibitory neurons      % total number
+    Ne=Nout;               Ni=Ne / 4;                N=Ne+Ni;
     
     groupSpikeCounts = zeros(numberOfGroups);
     muscleDelta = zeros(numberOfMuscles, 1);
@@ -99,7 +100,6 @@ else
     a_mot=.02*ones(Nmot,1);
     d_mot=8*ones(Nmot,1);
     post=ceil([N*rand(Ne,M);Ne*rand(Ni,M)]); % Assign the postsynaptic neurons for each neuron's synapse in the reservoir.
-    %post_mot=repmat(1:Nmot,Nout,1); % All output neurons connect to all motor neurons.
     
     % Connect output groups to their respective motor groups (e.g. 1:100 to 1:100)
     post_mot = [];
@@ -107,9 +107,9 @@ else
         post_mot = cat(1, post_mot, repmat((g - 1) * groupSize + 1:g * groupSize, groupSize, 1));
     end
     
-    s=[rand(Ne,M);-rand(Ni,M)];         % Synaptic weights in the reservoir.
+    s=[rand(Ne,M);-rand(Ni,M)]; % Synaptic weights in the reservoir.
     sout=rand(Nout,Nmot); % Synaptic weights from the reservoir output neurons to the motor neurons.
-
+    
     % Normalizing the synaptic weights.
     sout=sout./(mean(mean(sout)));
     
@@ -144,7 +144,7 @@ else
     if strcmp(reinforcer,'relhisal')
         temprewhist=zeros(1,10); % Keeps track of rewards given at a threshold value for up to 10 previous sounds.
     end
-
+    
     if strcmp(reinforcer, 'range')
         temprewhist=zeros(1,10);
         range_hist = NaN(newT, 1); % Keeps a record of the range over the entire simulation run time.
@@ -199,7 +199,7 @@ for sec = (sec + 1):T % T is the duration of the simulation in seconds.
         v_mot(fired_mot)=-65;
         u(fired)=u(fired)+d(fired);         % Individual neuronal dynamics
         u_mot(fired_mot)=u_mot(fired_mot)+d_mot(fired_mot);
-                
+        
         % Spike-timing dependent plasticity computations:
         STDP(fired_out,t+D)=0.1; % Keep a record of when the output neurons spiked.
         for k=1:length(fired_mot)
@@ -210,6 +210,7 @@ for sec = (sec + 1):T % T is the duration of the simulation in seconds.
         motFirings=[motFirings;t*ones(length(fired_mot),1),fired_mot];
         % For any presynaptic neuron that just fired, calculate the current to add
         % as proportional to the synaptic strengths from its postsynaptic neurons.
+        I(1:Ne)=I(1:Ne)+1*muscleState(ceil((1:Ne) / (2 * groupSize)), t, sec);
         k=size(firings,1);
         while firings(k,1)>t-D
             del=delays{firings(k,2),t-firings(k,1)+1};
@@ -310,9 +311,9 @@ for sec = (sec + 1):T % T is the duration of the simulation in seconds.
                     end
                     % Play the sound automatically for yoked simulations
                     if verLessThan('matlab', '8.0.0')
-                        [mysound,Fs] = wavread([wavdir,'/synth_',id,'_yoke_',num2str(sec),'.wav']);
+                        [mysound,Fs] = wavread([wavdir,'/sound_',id,'_yoke_',num2str(sec),'.wav']);
                     else
-                        [mysound,Fs] = audioread([wavdir,'/synth_',id,'_yoke_',num2str(sec),'.wav']);
+                        [mysound,Fs] = audioread([wavdir,'/sound_',id,'_yoke_',num2str(sec),'.wav']);
                     end
                     sound(mysound,Fs);
                 elseif strcmp(reinforcer,'human')
@@ -320,9 +321,9 @@ for sec = (sec + 1):T % T is the duration of the simulation in seconds.
                     tempInput = input('Press Return/Enter to play the sound.','s');
                     % Read and play the sound file. (maintains backwards compatibility with wavread)
                     if verLessThan('matlab', '8.0.0')
-                        [mysound,Fs] = wavread([wavdir,'/synth_',id,'_',num2str(sec),'.wav']);
+                        [mysound,Fs] = wavread([wavdir,'/sound_',id,'_',num2str(sec),'.wav']);
                     else
-                        [mysound,Fs] = audioread([wavdir,'/synth_',id,'_',num2str(sec),'.wav']);
+                        [mysound,Fs] = audioread([wavdir,'/sound_',id,'_',num2str(sec),'.wav']);
                     end
                     sound(mysound,Fs);
                     % Get listener's reinforcment decision.
@@ -345,8 +346,8 @@ for sec = (sec + 1):T % T is the duration of the simulation in seconds.
                         temprewhist(10) = 1;
                         % If at least 3 of the last 10 sounds were above
                         % threshold, raise the threshold value and reset the count.
-                        if mean(temprewhist) >= .3
-                            salthresh = salthresh + 1;
+                        if mean(temprewhist) >= .5
+                            salthresh = salthresh + 0.5;
                             temprewhist = zeros(1,10);
                         end
                     else
@@ -429,9 +430,7 @@ for sec = (sec + 1):T % T is the duration of the simulation in seconds.
         title('Motor Neuron Firings', 'fontweight','bold');
         axis([0 1000 0 Nmot]);
         subplot(4,1,4);
-        for m = 1:7
-            plot((1:1000), muscleState(1,:,sec));
-        end
+        plot((1:1000), muscleState(:,:,sec));
         title('Motor Group Activity', 'fontweight','bold');
         
         drawnow;
