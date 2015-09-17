@@ -198,7 +198,7 @@ for sec = (sec + 1):T % T is the duration of the simulation in seconds.
         % Spike-timing dependent plasticity computations:
         STDP(fired_out,t+D)=0.1; % Keep a record of when the output neurons spiked.
         for k=1:length(fired_mot)
-            sd(:,fired_mot(k))=sd(:,fired_mot(k))+STDP(:,t); % Adjusting sd for synapses eligible for potentiation.
+            sd(post_mot(:,fired_mot(k)),fired_mot(k)) = sd(post_mot(:,fired_mot(k)),fired_mot(k)) + STDP(post_mot(:,fired_mot(k)),t); % Adjusting sd for synapses eligible for potentiation.
         end
         firings=[firings;t*ones(length(fired),1),fired];                % Update the record of when neuronal firings occurred.
         outFirings=[outFirings;t*ones(length(fired_out),1),fired_out];
