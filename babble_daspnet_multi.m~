@@ -205,7 +205,7 @@ for sec = (sec + 1):T % T is the duration of the simulation in seconds.
         motFirings=[motFirings;t*ones(length(fired_mot),1),fired_mot];
         % For any presynaptic neuron that just fired, calculate the current to add
         % as proportional to the synaptic strengths from its postsynaptic neurons.
-        I(1:Ne) = I(1:Ne) + 1.0 * ((2 * mod(ceil((1:Ne) / groupSize), 2) - 1)' .* muscleState(ceil((1:Ne) / (2 * groupSize)), t, sec));
+        I(1:Ne) = I(1:Ne) + 2 * mod(1.0 * ceil((1:Ne) / groupSize), 2) - 1) * muscleState(ceil((1:Ne) / (2 * groupSize)), t, sec);
         k=size(firings,1);
         while firings(k,1)>t-D
             del=delays{firings(k,2),t-firings(k,1)+1};
