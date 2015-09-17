@@ -22,7 +22,7 @@ function [] = babble_daspnet_multi(id, newT, reinforcer, yoke, plotOn)
 % Initialization
 rng shuffle;
 
-salthresh = 15;             % Initial salience value for reward (used in 'relhisal' reinforcment)
+salthresh = 5;             % Initial salience value for reward (used in 'relhisal' reinforcment)
 DAinc = 0.1;                  % Amount of dopamine given during reward
 sm = 4;                     % Maximum synaptic weight
 testint = 1;                % Number of seconds between vocalizations
@@ -99,19 +99,14 @@ else
     d=[   8*ones(Ne,1);    2*ones(Ni,1)];       % Membrane recovery variable after-spike shift. 
     a_mot=.02*ones(Nmot,1);
     d_mot=8*ones(Nmot,1);
-    post=ceil([N*rand(Ne,M);Ne*rand(Ni,M)]); % Assign the postsynaptic neurons for each neuron's synapse in the reservoir.
-    
-    % Connect output groups to their respective motor groups (e.g. 1:100 to 1:100)
-    post_mot = [];
-    for g = 1:numberOfGroups
-        post_mot = cat(1, post_mot, repmat((g - 1) * groupSize + 1:g * groupSize, groupSize, 1));
-    end
+    post=ceil([N*rand(Ne,M);Ne*rand(Ni,M)]); % Assign the postsynaptic neurons for each neuron's synapse in the reservoir
+    post_mot = rand(Nout,Nmot) < M / Nmot;
     
     s=[rand(Ne,M);-rand(Ni,M)]; % Synaptic weights in the reservoir.
-    sout=rand(Nout,Nmot); % Synaptic weights from the reservoir output neurons to the motor neurons.
+    sout = post_mot .* rand(Nout,Nmot); % Synaptic weights from the reservoir output neurons to the motor neurons.
     
     % Normalizing the synaptic weights.
-    sout=sout./(mean(mean(sout)));
+    sout = sout / mean(mean(sout(post_mot)));
     
     sd=zeros(Nout,Nmot); % The change to be made to sout.
     
@@ -120,7 +115,7 @@ else
     end
     
     for i = 1:Nout
-        delays_mot{i,1} = 1:groupSize;
+        delays_mot{i,1} = 1:Nmot;
     end
     
     STDP = zeros(Nout,1001+D);
@@ -210,7 +205,7 @@ for sec = (sec + 1):T % T is the duration of the simulation in seconds.
         motFirings=[motFirings;t*ones(length(fired_mot),1),fired_mot];
         % For any presynaptic neuron that just fired, calculate the current to add
         % as proportional to the synaptic strengths from its postsynaptic neurons.
-        I(1:Ne)=I(1:Ne)+1*muscleState(ceil((1:Ne) / (2 * groupSize)), t, sec);
+        I(1:Ne) = I(1:Ne) + 5.0 * muscleState(ceil((1:Ne) / (2 * groupSize)), t, sec);
         k=size(firings,1);
         while firings(k,1)>t-D
             del=delays{firings(k,2),t-firings(k,1)+1};
@@ -221,9 +216,11 @@ for sec = (sec + 1):T % T is the duration of the simulation in seconds.
         % Calculating currents to add for motor neurons. 
         k=size(outFirings,1);
         while outFirings(k,1)>t-D
-            del_mot=delays_mot{outFirings(k,2),t-outFirings(k,1)+1};
-            ind_mot = post_mot(outFirings(k,2),del_mot);
-            I_mot(ind_mot)=I_mot(ind_mot)+2*sout(outFirings(k,2), del_mot)';
+            %del_mot=delays_mot{outFirings(k,2),t-outFirings(k,1)+1};
+            %ind_mot = post_mot(outFirings(k,2),del_mot);
+            %outFirings(k,2)
+            %sout(outFirings(k,2),:)'
+            I_mot = I_mot + sout(outFirings(k,2),:)';
             k=k-1;
         end;
         
@@ -235,7 +232,7 @@ for sec = (sec + 1):T % T is the duration of the simulation in seconds.
         %v_mot_hist{sec}=[v_mot_hist{sec},v_mot];
         u=u+a.*(0.2*v-u);                   
         u_mot=u_mot+a_mot.*(0.2*v_mot-u_mot);
-
+        
 		% Exponential decay of the traces of presynaptic neuron firing
         STDP(:,t+D+1)=0.95*STDP(:,t+D);                             % tau = 20 ms
         
@@ -244,12 +241,10 @@ for sec = (sec + 1):T % T is the duration of the simulation in seconds.
         
         % Modify synaptic weights.
         if (mod(t,10)==0)
-            sout=max(0,min(sm,sout+DA*sd));
-
+            sout = max(0, min(sm, sout + DA * sd));
             % Normalizing the synaptic weights.
-            sout=sout./(mean(mean(sout)));
-            
-            sd=0.99*sd; % Decrease in synapse's eligibility to change over time.
+            sout = sout / mean(mean(sout(post_mot)));
+            sd = 0.99 * sd; % Decrease in synapse's eligibility to change over time.
         end;
         
         % Every testint seconds, use the motor neuron spikes to generate a sound.
@@ -262,8 +257,9 @@ for sec = (sec + 1):T % T is the duration of the simulation in seconds.
                 end
                 for m = 1:numberOfMuscles
                     spikeDelta = groupSpikeCounts(2 * m - 1) - groupSpikeCounts(2 * m);
-                    muscleDelta(m) = 0.99 * muscleDelta(m) + 0.005 * spikeDelta;
-                    muscleState(m,t+1,sec) = min(max(muscleState(m,t,sec) + muscleDelta(m), -1), 1);
+                    muscleDelta(m) = 0.99 * muscleDelta(m) + 0.01 * spikeDelta;
+                    %muscleState(m,t+1,sec) = min(max(muscleState(m,t,sec) + muscleDelta(m), -1), 1);
+                    muscleState(m,t+1,sec) = min(max(muscleDelta(m), -1), 1);
                 end
             end
             
@@ -294,7 +290,7 @@ for sec = (sec + 1):T % T is the duration of the simulation in seconds.
                     end
                     salience = sum(abs(salienceResults.saliency(31:180))); % Summing over salience trace to produce a single value.
                     salhist(sec,1) = salience; % History of salience over entire simulation.
-          
+                    
                     if ~(strcmp(reinforcer,'human') && not(yoke))
                         display(['salience = ',num2str(salience)]);
                     end
