@@ -25,7 +25,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
     salienceIncrement = 0.1;
     salienceIncrementThreshold = 0.3;
     proprioception = false;
-    dopamineIncrement = 1.0;
+    dopamineIncrement = 0.1;
     maximumSynapticWeight = 4;
     
     % Directory names for data
@@ -124,7 +124,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
 
     DA=0; % Level of dopamine above the baseline.
     
-    muscleScale = 5;
+    muscleScale = 4;
     muscleSmooth = 0.01;
     sec=0;
     
@@ -209,7 +209,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
             % Calculating currents to add for motor neurons. 
             k=size(outFirings,1);
             while outFirings(k,1)>t-D
-                I_mot = I_mot + sout(outFirings(k,2),:)';
+                I_mot = I_mot + 2 * sout(outFirings(k,2),:)';
                 k=k-1;
             end;
             
@@ -389,7 +389,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
             title('Motor Neuron Firings', 'fontweight','bold');
             axis([0 1000 0 Nmot]);
             subplot(4,1,4);
-            plot((1:1000), muscleState(:,:,sec));
+            plot((1:1000), muscleState(1,:,sec));
             title('Motor Group Activity', 'fontweight','bold');
             
             set(0, 'currentfigure', hSynapseMatrix)
