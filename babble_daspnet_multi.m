@@ -25,8 +25,8 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
     salienceIncrement = 0.1;
     salienceIncrementThreshold = 0.3;
     proprioception = false;
-    dopamineIncrement = 0.1;
-    maximumSynapticWeight = 4;
+    dopamineIncrement = 0.5;
+    maximumSynapticWeight = 8;
     
     % Directory names for data
     wavdir = [id, '_Wave'];
@@ -75,6 +75,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
     
     % Initialize network configuration
     M=100;                 % number of synapses per neuron
+    motorM = 200;          % number of synapses between reservoir and motor neurons
     D=1;                   % maximal conduction delay
     
     numberOfMuscles = 4;
@@ -95,13 +96,13 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
     a_mot=.02*ones(Nmot,1);
     d_mot=8*ones(Nmot,1);
     post=ceil([N*rand(Ne,M);Ne*rand(Ni,M)]); % Assign the postsynaptic neurons for each neuron's synapse in the reservoir
-    post_mot = rand(Nout,Nmot) < M / Nmot;
+    post_mot = rand(Nout,Nmot) < motorM / Nmot;
     
     s=[rand(Ne,M);-rand(Ni,M)]; % Synaptic weights in the reservoir.
-    sout = post_mot .* rand(Nout,Nmot); % Synaptic weights from the reservoir output neurons to the motor neurons.
+    sout = 2 * post_mot .* rand(Nout,Nmot); % Synaptic weights from the reservoir output neurons to the motor neurons.
     
     % Normalize the synaptic weights
-    sout = sout / mean(mean(sout(post_mot)));
+    sout = 2 * sout / mean(mean(sout(post_mot)));
     % The change to be made to sout
     sd=zeros(Nout,Nmot);
 
@@ -157,6 +158,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
     if plotOn
         hNetworkActivity = figure();
         hSynapseMatrix = figure();
+        hSalienceReward = figure();
     end
 
     %RUNNING THE SIMULATION%
@@ -209,7 +211,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
             % Calculating currents to add for motor neurons. 
             k=size(outFirings,1);
             while outFirings(k,1)>t-D
-                I_mot = I_mot + 2 * sout(outFirings(k,2),:)';
+                I_mot = I_mot + sout(outFirings(k,2),:)';
                 k=k-1;
             end;
             
@@ -232,7 +234,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
             if (mod(t,10)==0)
                 sout = max(0, min(maximumSynapticWeight, sout + DA * sd));
                 % Normalize the synaptic weights
-                sout = sout / mean(mean(sout(post_mot)));
+                sout = 2 * sout / mean(mean(sout(post_mot)));
                  % Apply eligibility decay
                 sd = 0.99 * sd;
             end;
@@ -265,7 +267,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
                 setVocalTarget(fid, 1.0, 0.4, 'Hyoglossus');
                 for tPratt = 1:1000
                     setVocalTarget(fid, tPratt / 1000, muscleState(1,tPratt,sec), 'Masseter');
-                    setVocalTarget(fid, tPratt / 1000, muscleState(1,tPratt,sec), 'OrbicularisOris');
+                    setVocalTarget(fid, tPratt / 1000, muscleState(2,tPratt,sec), 'OrbicularisOris');
                 end
                 executeVocalization(name, fid, wavdir, true);
 
@@ -374,32 +376,44 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
         
         % Plot reservoir, output, and motor spikes, muscle states, and motor synapses
         if plotOn
-            set(0, 'currentfigure', hNetworkActivity)
+            set(0, 'currentfigure', hNetworkActivity);
             set(hNetworkActivity, 'name', ['Neural Spiking for Second: ', num2str(sec)], 'numbertitle','off');
-            subplot(4,1,1)
+            subplot(3,1,1);
             plot(firings(:,1),firings(:,2),'.'); % Plot all the neurons' spikes
-            title('Reservoir Firings', 'fontweight','bold');
+            title('Reservoir Spike Raster Plot', 'fontweight','bold');
             axis([0 1000 0 N]);
-            subplot(4,1,2)
-            plot(outFirings(:,1),outFirings(:,2),'.'); % Plot the output neurons' spikes
-            title('Output Neuron Firings', 'fontweight','bold');
-            axis([0 1000 0 Nout]);
-            subplot(4,1,3)
+            ylabel('Neuron Index');
+            subplot(3,1,2);
             plot(motFirings(:,1),motFirings(:,2),'.'); % Plot the motor neurons' spikes
-            title('Motor Neuron Firings', 'fontweight','bold');
+            title('Motor Neuron Spike Raster Plot', 'fontweight', 'bold');
             axis([0 1000 0 Nmot]);
-            subplot(4,1,4);
+            ylabel('Neuron Index');
+            subplot(3,1,3);
             plot((1:1000), muscleState(1,:,sec));
-            title('Motor Group Activity', 'fontweight','bold');
+            title('Motor Group Activity', 'fontweight', 'bold');
+            xlabel('Time (ms)');
+            ylabel('Activity');
             
-            set(0, 'currentfigure', hSynapseMatrix)
-            set(hSynapseMatrix, 'name', ['Synaptic Strengths for Second: ', num2str(sec)], 'numbertitle','off');
-            imagesc(sout)
-            set(gca,'YDir','normal')
+            set(0, 'currentfigure', hSynapseMatrix);
+            set(hSynapseMatrix, 'name', ['Synaptic Strengths for Second: ', num2str(sec)], 'numbertitle', 'off');
+            imagesc(sout);
+            set(gca, 'YDir', 'normal');
             colorbar;
-            title('Synapse Strength between Output Neurons and Motor Neurons', 'fontweight','bold');
-            xlabel('postsynaptic motor neuron index', 'fontweight','bold');
-            ylabel('presynaptic output neuron index', 'fontweight','bold');
+            title('Synapse Strength between Output Neurons and Motor Neurons', 'fontweight', 'bold');
+            xlabel('Post Synaptic Motor Neuron Index');
+            ylabel('Presynaptic Output Neuron Index');
+            
+            set(0, 'currentfigure', hSalienceReward);
+            set(hSalienceReward, 'name', 'Salience and Reward', 'numbertitle', 'off');
+            subplot(2,1,1);
+            plot(1:sec, salhist, '.b', 1:sec, smooth(salhist, 50), 'k');
+            title('RMS Auditory Salience by Vocalization', 'fontweight', 'bold');
+            ylabel('Salience');
+            subplot(2,1,2);
+            plot(rew / 1000, 1:size(rew,2));
+            title('Cumulative Reward', 'fontweight', 'bold');
+            xlabel('Time (s)');
+            ylabel('Reward');
             
             drawnow;
         end
