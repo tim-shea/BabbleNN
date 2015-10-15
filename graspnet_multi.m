@@ -23,9 +23,11 @@ function [] = graspnet_multi(id, duration, reinforcer, yoke, plotOn)
     dopamineDelay = 100;
     dopamineScale = 500;
     maximumSynapticWeight = 4;
-    muscleScale = 0.2;
+    muscleScale = 0.5;
     muscleSmooth = 0.01;
     excInhRatio = 4;
+    numberOfMuscles = 1;
+    groupSize = 400;
     
     % Check simulation id for spaces
     if any(isspace(id))
@@ -66,9 +68,7 @@ function [] = graspnet_multi(id, duration, reinforcer, yoke, plotOn)
     workspace = [id '/' id '.mat'];
     
     % Initialize network configuration
-    numberOfMuscles = 1;
     numberOfGroups = 2 * numberOfMuscles;
-    groupSize = 400;
     NMot = groupSize * numberOfGroups;
     NExc = NMot;
     NInh = NMot / excInhRatio;
@@ -104,7 +104,7 @@ function [] = graspnet_multi(id, duration, reinforcer, yoke, plotOn)
     
     wExcMot = rand(NExc, SExcMot);
     wExcInh = rand(NExc, SExcInh);
-    wInhMot = -rand(NInh, SInhMot);
+    wInhMot = -2 * ones(NInh, SInhMot);
     
     stdpPre = zeros(NExc, 1001 + maximumDelay);
     stdpInh = zeros(NInh, 1001 + maximumDelay);
@@ -177,18 +177,20 @@ function [] = graspnet_multi(id, duration, reinforcer, yoke, plotOn)
             % Update eligibility traces
             for k = 1:length(firedExc)
                 n = firedExc(k);
-                eligExcInh(n,:) = eligExcInh(n,:) - 1.25 * stdpInh(postExcInh(n,:),t)';
-                eligExcMot(n,:) = eligExcMot(n,:) - 1.25 * stdpMot(postExcMot(n,:),t)';
+                eligExcInh(n,:) = eligExcInh(n,:) - 1.5 * stdpInh(postExcInh(n,:),t)';
+                eligExcMot(n,:) = eligExcMot(n,:) - 1.5 * stdpMot(postExcMot(n,:),t)';
             end
             
             for k = 1:length(firedInh)
-                synInd = find(postExcInh == firedInh(k));
-                eligExcInh(synInd) = eligExcInh(synInd) + 1.0 * stdpPre(ceil(synInd / SExcInh),t);
+                synInd = postExcInh == firedInh(k);
+                [rows, cols] = find(synInd);
+                eligExcInh(synInd) = eligExcInh(synInd) + 1.0 * stdpPre(rows,t);
             end
             
             for k = 1:length(firedMot)
-                synInd = find(postExcMot == firedMot(k));
-                eligExcMot(synInd) = eligExcMot(synInd) + 1.0 * stdpPre(ceil(synInd / SExcMot),t);
+                synInd = postExcMot == firedMot(k);
+                [rows, cols] = find(synInd);
+                eligExcMot(synInd) = eligExcMot(synInd) + 1.0 * stdpPre(rows,t);
             end
             
             % Update the record of when neuronal firings occurred
@@ -198,7 +200,9 @@ function [] = graspnet_multi(id, duration, reinforcer, yoke, plotOn)
             
             % Add proprioceptive inputs to excitatory inputs
             if proprioception
-                responses = 1.5 * sin(2 * pi * (muscleStates(sec,t,1) - ((1:NExc)' / NExc)));
+                muscles = reshape(repmat(muscleStates(sec,t,:), 2 * groupSize, 1), NExc, 1);
+                indices = repmat((1:2 * groupSize)', numberOfMuscles, 1) / (2 * groupSize);
+                responses = 1.5 * sin(2 * pi * (muscles - indices));
                 IExc(1:NExc) = IExc(1:NExc) + responses;
             end
             
@@ -253,9 +257,9 @@ function [] = graspnet_multi(id, duration, reinforcer, yoke, plotOn)
             end
             
             spikeDeltas = groupSpikeCounts(1:2:numberOfGroups) - groupSpikeCounts(2:2:numberOfGroups);
-            muscleDeltas = muscleSmooth * (muscleScale * spikeDeltas - muscleDeltas + 0.5 * (rand(numberOfMuscles, 1) - 0.5));
-            muscleStates(sec,t+1,:) = min(max(muscleStates(sec,t,:) + muscleDeltas, 0), 1);
-            error(t,:) = abs(muscleStates(sec,t+1,:) - targets);
+            muscleDeltas = muscleSmooth * (muscleScale * spikeDeltas' - muscleDeltas + 0.25 * (rand(numberOfMuscles, 1) - 0.5));
+            muscleStates(sec,t+1,:) = min(max(muscleStates(sec,t,:) + reshape(muscleDeltas, 1, 1, numberOfMuscles), 0), 1);
+            error(t,:) = abs(permute(muscleStates(sec,t+1,:), [3 1 2]) - targets);
             if and(strcmp(reinforcer, 'delta_error'), t > 1)
                 deltaError = sum(error(t,:)) - sum(error(t-1,:));
                 smoothDeltaError = smoothDeltaError + 0.01 * (deltaError - smoothDeltaError);
@@ -304,7 +308,7 @@ function [] = graspnet_multi(id, duration, reinforcer, yoke, plotOn)
             ylabel('Neuron Index');
             subplot(3,1,3);
             muscles = permute(muscleStates(sec,1:1000,:), [2 3 1]);
-            plot([muscles, repmat(targets, 1000, 1), DA(1:1000)]);
+            plot([muscles, repmat(targets', 1000, 1), DA(1:1000)]);
             title('Motor Group Activity', 'fontweight', 'bold');
             xlabel('Time (ms)');
             ylabel('Activity');
