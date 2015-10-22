@@ -25,7 +25,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
     salienceIncrement = 0.1;
     salienceIncrementThreshold = 0.3;
     proprioception = false;
-    dopamineIncrement = 0.5;
+    dopamineIncrement = 1.0;
     maximumSynapticWeight = 8;
     
     % Directory names for data
@@ -78,9 +78,9 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
     motorM = 200;          % number of synapses between reservoir and motor neurons
     D=1;                   % maximal conduction delay
     
-    numberOfMuscles = 4;
+    numberOfMuscles = 2;
     numberOfGroups = 2 * numberOfMuscles;
-    groupSize = 100;
+    groupSize = 200;
     Nout = groupSize * numberOfGroups;
     Nmot = Nout;
     
@@ -125,7 +125,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
 
     DA=0; % Level of dopamine above the baseline.
     
-    muscleScale = 4;
+    muscleScale = 5;
     muscleSmooth = 0.01;
     sec=0;
     
@@ -252,7 +252,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
                 end
             end
             
-             % Generate a vocalization based on the 1 s timeseries of smoothed summed motor neuron spikes
+            % Generate a vocalization based on the 1 s timeseries of smoothed summed motor neuron spikes
             if t == 1000
                 % Synthesize a vocalization based on the previous second of activity
                 [name, fid] = createVocalization(id, yoke, sec, wavdir);
@@ -267,7 +267,8 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
                 setVocalTarget(fid, 1.0, 0.4, 'Hyoglossus');
                 for tPratt = 1:1000
                     setVocalTarget(fid, tPratt / 1000, muscleState(1,tPratt,sec), 'Masseter');
-                    setVocalTarget(fid, tPratt / 1000, muscleState(2,tPratt,sec), 'OrbicularisOris');
+                    %setVocalTarget(fid, tPratt / 1000, muscleState(2,tPratt,sec), 'OrbicularisOris');
+                    setVocalTarget(fid, tPratt / 1000, muscleState(2,tPratt,sec), 'UpperTongue');
                 end
                 executeVocalization(name, fid, wavdir, true);
 
@@ -389,7 +390,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
             axis([0 1000 0 Nmot]);
             ylabel('Neuron Index');
             subplot(3,1,3);
-            plot((1:1000), muscleState(1,:,sec));
+            plot(permute(muscleState(:,1:1000,sec), [2 1 3]));
             title('Motor Group Activity', 'fontweight', 'bold');
             xlabel('Time (ms)');
             ylabel('Activity');

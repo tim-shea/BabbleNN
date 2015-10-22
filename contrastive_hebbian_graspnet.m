@@ -14,9 +14,12 @@ function [] = contrastive_hebbian_graspnet(id, duration, target_function, plotOn
     rng shuffle;
     
     learningRate = 0.5;
-    minimumSynapticWeight = 0;
+    minimumSynapticWeight = -8;
     maximumSynapticWeight = 8;
-    groupSize = 2500;
+    maximumDelay = 1;
+    NOut = 1000;
+    NIn = 1000;
+    NTrg = 1000;
     
     % Check simulation id for spaces
     if any(isspace(id))
@@ -45,46 +48,33 @@ function [] = contrastive_hebbian_graspnet(id, duration, target_function, plotOn
     addpath(spkdir);
     workspace = [id '/' id '.mat'];
     
-    % Initialize network configuration
-    NOut = groupSize;
-    NExc = NOut;
-    NTrg = NOut;
-    
-    inputs = zeros(NExc, 1);
-    targets = zeros(NTrg, 1);
-    
-    %SExcOut = 200;
-    maximumDelay = 1;
+    inputs = [0 0];
+    targets = 0;
     
     % Set time scales of membrane recovery variable
-    aExc = 0.02;
+    aIn = 0.02;
     aOut = 0.02;
     aTrg = 0.02;
     % Membrane recovery variable after-spike shift
-    dExc = 8;
+    dIn = 8;
     dOut = 8;
     dTrg = 8;
     
-    % Generate sparse synaptic connections
-    %postExcOut = ceil(NOut * rand(NExc, SExcOut));
-    %wExcOut = rand(NExc, SExcOut);
-    
     % Generate all-to-all synaptic connections
-    wExcOut = rand(NExc, NOut);
-    
-    stdpPre = zeros(NExc, 1001 + maximumDelay);
+    w = rand(NIn, NOut);
+    stdpPre = zeros(NIn, 1001 + maximumDelay);
     
     % Initialize membrane potentials
-    vExc = -65 * ones(NExc, 1);
+    vIn = -65 * ones(NIn, 1);
     vOut = -65 * ones(NOut, 1);
     vTrg = -65 * ones(NTrg, 1);
     % Initialize adaptation variable
-    uExc = 0.2 .* vExc;
+    uIn = 0.2 .* vIn;
     uOut = 0.2 .* vOut;
     uTrg = 0.2 .* vTrg;
     
     % Neuron spikes for the current second
-    spikesExc = [-maximumDelay 0];
+    spikesIn = [-maximumDelay 0];
     spikesOut = [-maximumDelay 0];
     spikesTrg = [-maximumDelay 0];
     
@@ -107,77 +97,79 @@ function [] = contrastive_hebbian_graspnet(id, duration, target_function, plotOn
         for t = 1:1000
             
             % Random thalamic input
-            IExc = 12 * (rand(NExc, 1) - 0.5);
-            IOut = 12 * (rand(NOut, 1) - 0.5);
-            ITrg = 12 * (rand(NTrg, 1) - 0.5);
+            IIn = 10 * (rand(NIn, 1) - 0.5);
+            IOut = 10 * (rand(NOut, 1) - 0.5);
+            ITrg = 10 * (rand(NTrg, 1) - 0.5);
             
             % Indices of fired neurons
-            firedExc = find(vExc >= 30);
+            firedIn = find(vIn >= 30);
             firedOut = find(vOut >= 30);
             firedTrg = find(vTrg >= 30);
             
             % Reset the voltages for those neurons that fired
-            vExc(firedExc) = -65;
+            vIn(firedIn) = -65;
             vOut(firedOut) = -65;
             vTrg(firedTrg) = -65;
-            uExc(firedExc) = uExc(firedExc) + dExc;
+            uIn(firedIn) = uIn(firedIn) + dIn;
             uOut(firedOut) = uOut(firedOut) + dOut;
             uTrg(firedTrg) = uTrg(firedTrg) + dTrg;
             
             % Spike-timing dependent plasticity computations
-            stdpPre(firedExc,t + maximumDelay) = 1.0;
+            stdpPre(firedIn,t + maximumDelay) = 1.0;
             
             % Apply output-based anti-hebbian plasticity
             for spk = 1:length(firedOut)
                 n = firedOut(spk);
-                wExcOut(:,n) = max(minimumSynapticWeight, wExcOut(:,n) - learningRate * stdpPre(:,t));
+                w(:,n) = max(minimumSynapticWeight, w(:,n) - learningRate * stdpPre(:,t));
             end
             
             % Apply target-based hebbian plasticity
             for spk = 1:length(firedTrg)
                 n = firedTrg(spk);
-                wExcOut(:,n) = min(maximumSynapticWeight, wExcOut(:,n) + learningRate * stdpPre(:,t));
+                w(:,n) = min(maximumSynapticWeight, w(:,n) + learningRate * stdpPre(:,t));
             end
             
             % Update the record of when neuronal firings occurred
-            spikesExc = [spikesExc; t * ones(length(firedExc), 1), firedExc];
+            spikesIn = [spikesIn; t * ones(length(firedIn), 1), firedIn];
             spikesOut = [spikesOut; t * ones(length(firedOut), 1), firedOut];
             spikesTrg = [spikesTrg; t * ones(length(firedTrg), 1), firedTrg];
             
             % Add input and target currents
-            if strcmp(target_function, 'plus0.5')
+            if strcmp(target_function, 'xor')
                 %inputs = mod((sec * 1000 + t) / 400, 1.0) * ones(NExc, 1);
                 if mod(t, 250) == 0
-                    inputs = rand() * ones(NExc, 1);
+                    inputs = [round(rand()), round(rand())];
                 end
-                targets = mod(2 * abs(0.5 - inputs), 1.0);
+                targets = [xor(inputs(1), inputs(2)), not(xor(inputs(1), inputs(2)))];
                 
-                responses = 4 * max(0, 0.25 - abs((1:NExc)' / NExc - inputs));
-                IExc(1:NExc) = IExc(1:NExc) + responses;
+                inputResponses = [inputs(1) * ones(NIn / 2, 1); inputs(2) * ones(NIn / 2, 1)];
+                targetResponses = [targets(1) * ones(NTrg / 2, 1); targets(2) * ones(NTrg / 2, 1)];
                 
-                responses = 4 * max(0, 0.25 - abs((1:NTrg)' / NTrg - targets));
-                ITrg(1:NTrg) = ITrg(1:NTrg) + responses;
+                %function currents = continuous_response(value, rows, sharpness)
+                %    responses = sharpness * max(0, (1 / sharpness) - abs((1:rows)' / rows - value));
+                %end
+                
+                IIn(1:NIn) = (10 + 5 * inputResponses) .* (rand(NIn, 1) - 0.5);
+                ITrg(1:NTrg) = (10 + 5 * targetResponses) .* (rand(NTrg, 1) - 0.5);
             end
             
             % Calculate post synaptic conductances
-            k = size(spikesExc, 1);
-            while spikesExc(k,1) > t - maximumDelay
-                %synInd = postExcOut(spikesExc(k,2),:);
-                %IOut(synInd) = IOut(synInd) + wExcOut(spikesExc(k,2))';
-                IOut = IOut + wExcOut(spikesExc(k,2),:)';
+            k = size(spikesIn, 1);
+            while spikesIn(k,1) > t - maximumDelay
+                IOut = IOut + w(spikesIn(k,2),:)';
                 k = k - 1;
             end
             
             % Update neuronal membrane potentials
-            vExc = vExc + 0.5 * ((0.04 * vExc + 5) .* vExc + 140 - uExc + IExc);
-            vExc = vExc + 0.5 * ((0.04 * vExc + 5) .* vExc + 140 - uExc + IExc);
+            vIn = vIn + 0.5 * ((0.04 * vIn + 5) .* vIn + 140 - uIn + IIn);
+            vIn = vIn + 0.5 * ((0.04 * vIn + 5) .* vIn + 140 - uIn + IIn);
             vOut = vOut + 0.5 * ((0.04 * vOut + 5) .* vOut + 140 - uOut + IOut);
             vOut = vOut + 0.5 * ((0.04 * vOut + 5) .* vOut + 140 - uOut + IOut);
             vTrg = vTrg + 0.5 * ((0.04 * vTrg + 5) .* vTrg + 140 - uTrg + ITrg);
             vTrg = vTrg + 0.5 * ((0.04 * vTrg + 5) .* vTrg + 140 - uTrg + ITrg);
             
             % Update neuronal adaptation variables
-            uExc = uExc + aExc .* (0.2 * vExc - uExc);
+            uIn = uIn + aIn .* (0.2 * vIn - uIn);
             uOut = uOut + aOut .* (0.2 * vOut - uOut);
             uTrg = uTrg + aTrg .* (0.2 * vTrg - uTrg);
             
@@ -186,7 +178,7 @@ function [] = contrastive_hebbian_graspnet(id, duration, target_function, plotOn
             
             % Print an update
             if t == 1000
-                display(['Input Firing Rate: ' num2str(size(spikesExc, 1) / NExc)]);
+                display(['Input Firing Rate: ' num2str(size(spikesIn, 1) / NIn)]);
                 display(['Output Firing Rate: ' num2str(size(spikesOut, 1) / NOut)]);
                 display(['Target Firing Rate: ' num2str(size(spikesTrg, 1) / NTrg)]);
             end
@@ -200,9 +192,9 @@ function [] = contrastive_hebbian_graspnet(id, duration, target_function, plotOn
         if mod(sec, saveInterval) == 0 || sec == T
             display('Saving spikes to file. Do not exit program.');
             spikes_fid = fopen([spkdir '/spikes_' num2str(sec) '.txt'],'w');
-            for spike = 1:size(spikesExc, 1)
+            for spike = 1:size(spikesIn, 1)
                 fprintf(spikes_fid, '%i\t', sec);
-                fprintf(spikes_fid, '%i\t%i', spikesExc(spike,:));
+                fprintf(spikes_fid, '%i\t%i', spikesIn(spike,:));
                 fprintf(spikes_fid, '\n');
             end
             fclose(spikes_fid);
@@ -213,20 +205,20 @@ function [] = contrastive_hebbian_graspnet(id, duration, target_function, plotOn
         if plotOn
             set(0, 'currentfigure', hNetworkActivity);
             set(hNetworkActivity, 'name', ['Neural Spiking for Second: ', num2str(sec)], 'numbertitle', 'off');
-            plot([spikesExc(:,1); spikesOut(:,1); spikesTrg(:,1)], ...
-                [spikesExc(:,2); (spikesOut(:,2) + NExc); (spikesTrg(:,2) + NExc + NOut)], '.');
+            plot([spikesIn(:,1); spikesOut(:,1); spikesTrg(:,1)], ...
+                [spikesIn(:,2); (spikesOut(:,2) + NIn); (spikesTrg(:,2) + NIn + NOut)], '.');
             title('Spike Raster Plot', 'fontweight', 'bold');
-            axis([0 1000 0 NExc + NOut + NTrg]);
+            axis([0 1000 0 NIn + NOut + NTrg]);
             ylabel('Neuron Index');
             
             set(0, 'currentfigure', hSynapseMatrix);
             set(hSynapseMatrix, 'name', ['Synaptic Strengths for Second: ', num2str(sec)], 'numbertitle', 'off');
-            imagesc(wExcOut);
+            imagesc(w);
             set(gca, 'YDir', 'normal');
             colorbar;
-            title('Synapse Strength from Excitatory Neurons', 'fontweight', 'bold');
-            xlabel('Post Synaptic Motor Neuron Index');
-            ylabel('Synapse Index');
+            title('Synapse Weights', 'fontweight', 'bold');
+            xlabel('Neuron Index');
+            ylabel('Neuron Index');
             
             drawnow;
         end
@@ -234,8 +226,8 @@ function [] = contrastive_hebbian_graspnet(id, duration, target_function, plotOn
         % Prepare for the following 1000 ms
         stdpPre(:,1:maximumDelay + 1) = stdpPre(:,1001:1001 + maximumDelay);
         
-        indExc = find(spikesExc(:,1) > 1001 - maximumDelay);
-        spikesExc = [-maximumDelay 0; spikesExc(indExc,1) - 1000, spikesExc(indExc,2)];
+        indIn = find(spikesIn(:,1) > 1001 - maximumDelay);
+        spikesIn = [-maximumDelay 0; spikesIn(indIn,1) - 1000, spikesIn(indIn,2)];
         indOut = find(spikesOut(:,1) > 1001 - maximumDelay);
         spikesOut = [-maximumDelay 0; spikesOut(indOut,1) - 1000, spikesOut(indOut,2)];
         indTrg = find(spikesTrg(:,1) > 1001 - maximumDelay);
