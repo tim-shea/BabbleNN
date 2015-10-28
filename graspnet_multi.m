@@ -19,20 +19,20 @@ function [] = graspnet_multi(id, trials, yoke, plotOn)
     rng shuffle;
     
     proprioception = true;
-    numberOfMuscles = 2;
-    motorScale = 0.03;
+    numberOfMuscles = 1;
+    motorScale = 0.01;
     groupSize = 800;
     excInhRatio = 4;
     SExcMot = 200;
     maximumSynapticWeight = 4;
     
-    trialDuration = 2000;
+    trialDuration = 1000;
     interTrialInterval = 500;
     
-    errorThreshold = 0.5;
+    rewardThreshold = 0.5;
     rewardCountThreshold = 3;
     errorThresholdScaling = 0.99;
-    dopamineIncrement = 10.0;
+    dopamineIncrement = 1.0;
     dopamineDelay = 100;
     
     % Check simulation id for spaces
@@ -80,6 +80,7 @@ function [] = graspnet_multi(id, trials, yoke, plotOn)
     motorStates = zeros(trials, trialDuration + 1, numberOfMuscles);
     
     error = zeros(trials, 1);
+    deltaError = zeros(trials, 1);
     rewards = zeros(trials, 1);
     
     % Set time scales of membrane recovery variable
@@ -155,8 +156,8 @@ function [] = graspnet_multi(id, trials, yoke, plotOn)
             
             % Generate random thalamic input
             IExc = 11 * (rand(NExc, 1) - 0.5);
-            IInh = 12 * (rand(NInh, 1) - 0.5);
-            IMot = 11 * (rand(NMot, 1) - 0.5);
+            IInh = 13 * (rand(NInh, 1) - 0.5);
+            IMot = 13 * (rand(NMot, 1) - 0.5);
             
             % Apply spikes from the previous time step
             for k = 1:length(spikesExc)
@@ -241,8 +242,8 @@ function [] = graspnet_multi(id, trials, yoke, plotOn)
                 wExcInh = max(0, min(maximumSynapticWeight, wExcInh + (DA + 0.002) * eligExcInh));
                 wExcMot = max(0, min(maximumSynapticWeight, wExcMot + (DA + 0.002) * eligExcMot));
                 % Apply eligibility decay
-                eligExcInh = 0.95 * eligExcInh;
-                eligExcMot = 0.95 * eligExcMot;
+                eligExcInh = 0.99 * eligExcInh;
+                eligExcMot = 0.99 * eligExcMot;
             end
             
             motorFiringRates = zeros(groupSize, numberOfMuscles);
@@ -253,16 +254,17 @@ function [] = graspnet_multi(id, trials, yoke, plotOn)
             
             if t == trialDuration - interTrialInterval
                 error(trial) = sum(abs(motorStates(trial,:,1) - motorTargets(1))) / (trialDuration - interTrialInterval);
-                if ~yoke && error(trial) < errorThreshold
+                deltaError(trial) = error(trial) / abs(motorStates(trial,1,1) - motorTargets(1));
+                if ~yoke && deltaError(trial) < rewardThreshold
                     rewards(trial) = 1;
-                    if trial > 10 && sum(rewards(trial - 10:trial)) == rewardCountThreshold
-                        errorThreshold = errorThreshold * errorThresholdScaling;
-                    end
-                    DA = DA + dopamineIncrement;
+                    %if trial > 10 && sum(rewards(trial - 9:trial)) >= rewardCountThreshold
+                    %    errorThreshold = errorThreshold * errorThresholdScaling;
+                    %end
+                    DA = dopamineIncrement;
                 end
             end
             
-            DA = DA * 0.99;
+            DA = DA * 0.95;
             
             % Update the history of spikes for the current trial
             excSpikeRaster = [excSpikeRaster; t * ones(length(spikesExc), 1), spikesExc];
@@ -275,7 +277,7 @@ function [] = graspnet_multi(id, trials, yoke, plotOn)
         display(['Inhibitory Firing Rate: ' num2str(size(inhSpikeRaster, 1) / size(vInh, 1))]);
         display(['Motor Firing Rate: ' num2str(size(motSpikeRaster, 1) / size(vMot, 1))]);
         display(['Mean Error: ' num2str(error(trial))]);
-        display(['Error Threshold: ' num2str(errorThreshold)]);
+        display(['Reward Threshold: ' num2str(rewardThreshold)]);
         
         % Plot reservoir, output, and motor spikes, muscle states, and motor synapses
         if plotOn
@@ -316,8 +318,8 @@ function [] = graspnet_multi(id, trials, yoke, plotOn)
             set(0, 'currentfigure', hErrorReward);
             set(hErrorReward, 'name', 'Error and Reward', 'numbertitle', 'off');
             subplot(2, 1, 1);
-            plot(error(1:trial), '.r');
-            axis([0 trial 0 1]);
+            plot(deltaError(1:trial), '.r');
+            %axis([0 trial -1 1]);
             xlabel('Trial');
             ylabel('Mean Error');
             subplot(2, 1, 2);
