@@ -17,7 +17,7 @@
 %   babble_daspnet_multi('Mortimer', 7200, 'human', false, false);
 %
 %   For updates, see https://github.com/tim-shea/BabbleNN
-function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
+function [] = babble_daspnet_multi(id, duration, reinforcer, dof, muscleScale, yoke, plotOn)
     % Initialization
     rng shuffle;
     
@@ -27,6 +27,8 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
     proprioception = false;
     dopamineIncrement = 1.0;
     maximumSynapticWeight = 8;
+    %muscleScale = 5;
+    muscleSmooth = 0.01;
     
     % Directory names for data
     wavdir = [id, '_Wave'];
@@ -124,9 +126,6 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
     motFirings=[-D 0];  % Motor neuron spike timings.
 
     DA=0; % Level of dopamine above the baseline.
-    
-    muscleScale = 5;
-    muscleSmooth = 0.01;
     sec=0;
     
     rewcount=0; 
@@ -266,11 +265,11 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
                 setVocalTarget(fid, 0.0, 0.4, 'Hyoglossus');
                 setVocalTarget(fid, 1.0, 0.4, 'Hyoglossus');
                 for tPratt = 1:1000
-                    setVocalTarget(fid, tPratt / 1000, muscleState(1,tPratt,sec), 'Masseter');
-                    %setVocalTarget(fid, tPratt / 1000, muscleState(2,tPratt,sec), 'OrbicularisOris');
-                    setVocalTarget(fid, tPratt / 1000, muscleState(2,tPratt,sec), 'UpperTongue');
+                    setVocalTarget(fid, tPratt / 1000, muscleState(dof(1),tPratt,sec), 'Masseter');
+                    setVocalTarget(fid, tPratt / 1000, muscleState(dof(2),tPratt,sec), 'OrbicularisOris');
+                    %setVocalTarget(fid, tPratt / 1000, muscleState(dof(3),tPratt,sec), 'UpperTongue');
                 end
-                executeVocalization(name, fid, wavdir, true);
+                executeVocalization(name, fid, wavdir, false);
 
                 % Find the auditory salience of the sound:
                 if not(yoke)
@@ -407,14 +406,18 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, yoke, plotOn)
             set(0, 'currentfigure', hSalienceReward);
             set(hSalienceReward, 'name', 'Salience and Reward', 'numbertitle', 'off');
             subplot(2,1,1);
-            plot(1:sec, salhist, '.b', 1:sec, smooth(salhist, 50), 'k');
+            plot(50:50:duration, mean(reshape(salhist, 50, duration / 50), 1));
+            xlim([0 sec]);
             title('RMS Auditory Salience by Vocalization', 'fontweight', 'bold');
             ylabel('Salience');
             subplot(2,1,2);
-            plot(rew / 1000, 1:size(rew,2));
-            title('Cumulative Reward', 'fontweight', 'bold');
+            rewards = zeros(duration, 1);
+            rewards(ceil(rew / 1000)) = 1;
+            plot(50:50:duration, mean(reshape(rewards, 50, duration / 50), 1));
+            xlim([0 sec]);
+            title('Reward Frequency', 'fontweight', 'bold');
             xlabel('Time (s)');
-            ylabel('Reward');
+            ylabel('Proportion of Rewarded Trials');
             
             drawnow;
         end
@@ -468,7 +471,7 @@ function [] = executeVocalization(name, fid, wavdir, removeScript)
     elseif isunix
         praatPath = 'praat';
     elseif ispc
-        praatPath = 'c:/users/lab/praatcon';
+        praatPath = 'C:\Users\Tim\Downloads\praat\praatcon';
     end
     system([praatPath ' ' wavdir '/script_' name '.praat']);
     

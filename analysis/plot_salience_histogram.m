@@ -19,9 +19,9 @@ function [] = plot_salience_histogram( group_names, group_size, sim_duration )
         legend_entries{g} = [group_name ' (M=' num2str(mean2(group_salience)) ', SD=' ...
             num2str(std2(group_salience)) ')'];
     end
-    legend(legend_entries{1}, legend_entries{2});
+    legend(legend_entries{1}, legend_entries{2}, legend_entries{3});
     xlabel('RMS Auditory Salience');
-    ylabel('Probability');
+    ylabel('Frequency');
     hold off
 
 end
