@@ -175,7 +175,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, dof, muscleScale, y
         for t=1:1000                            % Millisecond timesteps
 
             %Random Thalamic Input.
-            I=13*(rand(N,1)-0.5);
+            I=12*(rand(N,1)-0.5);
             I_mot=8*(rand(Nmot,1)-0.5);
             
             fired = find(v>=30);                % Indices of fired neurons
@@ -200,7 +200,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, dof, muscleScale, y
             if proprioception
                 receptiveFields = repmat(linspace(-1, 1, 2 * groupSize)', numberOfMuscles, 1);
                 inputValues = muscleState(ceil((1:Ne) / (2 * groupSize)),t,sec);
-                I(1:Ne) = I(1:Ne) + 2 * (0.5 - abs(receptiveFields - inputValues));
+                I(1:Ne) = I(1:Ne) + 5 * max(0.4 - abs(receptiveFields - inputValues), 0);
             end
             k=size(firings,1);
             while firings(k,1)>t-D
@@ -231,12 +231,15 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, dof, muscleScale, y
             % Apply dopamine concentration decay
             DA=DA*0.995; 
             
+            % Scale synaptic weights down
+            sout(:,fired_mot) = sout(:,fired_mot) * 0.99;
+            
             % Apply spike timing dependent plasticity to motor synapses
             if (mod(t,10)==0)
                 sout = max(0, min(maximumSynapticWeight, sout + DA * sd));
                 % Normalize the synaptic weights
-                sout = 2 * sout / mean(mean(sout(post_mot)));
-                 % Apply eligibility decay
+                %sout = 2 * sout / mean(mean(sout(post_mot)));
+                % Apply eligibility decay
                 sd = 0.99 * sd;
             end;
             
@@ -255,6 +258,9 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, dof, muscleScale, y
             
             % Generate a vocalization based on the 1 s timeseries of smoothed summed motor neuron spikes
             if t == 1000
+                % Scale synaptic weights up
+                sout(:,setdiff(1:Nmot, fired_mot)) = sout(:,setdiff(1:Nmot, fired_mot)) / 0.99;
+                
                 % Synthesize a vocalization based on the previous second of activity
                 [name, fid] = createVocalization(id, yoke, sec, wavdir);
                 %setVocalTarget(fid, 0.0, 0.1 + 0.05 * mean(muscleState(1,:,sec)), 'Lungs');
@@ -262,8 +268,8 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, dof, muscleScale, y
                 setVocalTarget(fid, 0.02, 0.1, 'Lungs');
                 setVocalTarget(fid, 0.05, 0.0, 'Lungs');
                 setVocalTarget(fid, 1.0, 0.0, 'Lungs');
-                setVocalTarget(fid, 0.0, 0.5, 'Interarytenoid');
-                setVocalTarget(fid, 1.0, 0.5, 'Interarytenoid');
+                setVocalTarget(fid, 0.0, 0.52, 'Interarytenoid');
+                setVocalTarget(fid, 1.0, 0.52, 'Interarytenoid');
                 setVocalTarget(fid, 0.0, 0.4, 'Hyoglossus');
                 setVocalTarget(fid, 1.0, 0.4, 'Hyoglossus');
                 for tPratt = 1:1000

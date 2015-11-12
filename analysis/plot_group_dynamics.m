@@ -14,7 +14,7 @@ function [] = plot_group_dynamics(groups, num, dur, col)
             musc2 = permute(muscleState(2,:,1:dur), [3 2 1]);
             m1 = mean(musc1, 2);
             m2 = mean(musc2, 2);
-            scatter(m1, m2, [], 1:dur);
+            scatter(m1, m2, [], salhist);
         end
     end
     
