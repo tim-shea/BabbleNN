@@ -3,44 +3,27 @@ load('Cosyne16_Sims/TwoDoF_1.mat');
 
 hNetworkActivity = figure();
 set(hNetworkActivity, 'name', ['Example Network Activity'], 'numbertitle','off');
-subplot(4,2,1);
-plot(firings(:,1),firings(:,2),'.');
-set(gca, 'XTickLabel', []);
-set(gca, 'YTick', [0 800 1000]);
-aTitle = title('A', 'fontweight','bold');
-%set(aTitle, 'Position', [-200 900 0]);
-axis([0 1000 0 N]);
-ylabel('Res. Neuron #');
-subplot(4,2,3);
-plot(motFirings(:,1),motFirings(:,2),'.');
-set(gca, 'XTickLabel', []);
-set(gca, 'YTick', [0 800]);
-title('B', 'fontweight','bold');
-axis([0 1000 0 Nmot]);
-ylabel('Motor Neuron #');
-subplot(4,2,5);
-plot(permute(muscleState(:,1:1000,sec), [2 1 3]));
-set(gca, 'XTickLabel', []);
-title('C', 'fontweight','bold');
-axis([0 1000 -1 1]);
-ylabel('Muscle State');
-subplot(4,2,7);
-plot(1:5:1000, salienceResults.saliency);
-title('D', 'fontweight','bold');
-xlabel('Time (ms)');
-ylabel('Salience');
 
-subplot(2,2,2);
-plot(50:50:duration, mean(reshape(salhist, 50, duration / 50)), 'b');
-title('E', 'fontweight','bold');
-xlim([0 duration]);
-set(gca, 'XTickLabel', []);
-ylabel('Vocalization Salience');
-subplot(2,2,4);
-rewards = zeros(duration, 1);
-rewards(ceil(rew / 1000)) = 1;
-plot(50:50:duration, mean(reshape(rewards, 50, duration / 50)), 'r');
-title('F', 'fontweight','bold');
-xlim([0 duration]);
-xlabel('Time (s)');
-ylabel('Proportion of Trials Rewarded');
+subplot(2, 2, 1);
+excInd = firings(:,2) <= 800;
+inhInd = firings(:,2) > 800;
+mot1Ind = motFirings(:,2) <= 400;
+mot2Ind = motFirings(:,2) > 400;
+plot(firings(excInd,1), firings(excInd,2), '.r', firings(inhInd,1), firings(inhInd,2), '.b', ...
+     motFirings(mot1Ind,1), motFirings(mot1Ind,2) + 1000, '.m', ...
+     motFirings(mot2Ind,1), motFirings(mot2Ind,2) + 1000, '.c');
+aTitle = title('A', 'fontweight','bold');
+axis([0 1000 0 1800]);
+
+subplot(2, 2, 3);
+plot(permute(muscleState(:,1:1000,sec), [2 1 3]));
+title('B', 'fontweight','bold');
+axis([0 1000 -1 1]);
+
+subplot(2, 2, 2);
+imagesc(salienceResults.cortResp);
+title('C', 'fontweight','bold');
+
+subplot(2, 2, 4);
+plot(1:5:1000, salienceResults.saliency);
+xlim([0 1000]);

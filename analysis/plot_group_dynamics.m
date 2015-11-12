@@ -8,13 +8,13 @@ function [] = plot_group_dynamics(groups, num, dur, col)
     
     for i = 1:length(groups)
         for j = 1:num
-            name = [groups{i} '_' num2str(j)];
-            load(['Cosyne16_Sims/' name '.mat'], 'muscleState');
+            name = [groups{i}];
+            load([groups{i} '_Workspace/babble_daspnet_multi_' name '.mat'], 'muscleState', 'salhist');
             musc1 = permute(muscleState(1,:,1:dur), [3 2 1]);
             musc2 = permute(muscleState(2,:,1:dur), [3 2 1]);
             m1 = mean(musc1, 2);
             m2 = mean(musc2, 2);
-            plot(mean(reshape(m1, 360, dur / 360)), mean(reshape(m2, 360, dur / 360)), col(i));
+            scatter(m1, m2, [], 1:dur);
         end
     end
     

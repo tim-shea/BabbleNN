@@ -9,7 +9,7 @@ function [] = plot_mean_salience(group, num, dur)
     group_sal = [];
     group_t = [];
     for i = 1:num
-        name = [group '_' num2str(i)];
+        name = [group];
         load([name '_Workspace/babble_daspnet_multi_' name '.mat'], 'muscleState', 'salhist');
         musc1 = permute(muscleState(1,:,1:dur), [3 2 1]);
         musc2 = permute(muscleState(2,:,1:dur), [3 2 1]);

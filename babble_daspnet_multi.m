@@ -24,8 +24,8 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, dof, muscleScale, y
     salienceThreshold = 4.5;
     salienceIncrement = 0.1;
     salienceIncrementThreshold = 0.3;
-    proprioception = false;
-    dopamineIncrement = 1.0;
+    proprioception = true;
+    dopamineIncrement = 0.25;
     maximumSynapticWeight = 8;
     %muscleScale = 5;
     muscleSmooth = 0.01;
@@ -176,8 +176,8 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, dof, muscleScale, y
 
             %Random Thalamic Input.
             I=13*(rand(N,1)-0.5);
-            I_mot=13*(rand(Nmot,1)-0.5);
-
+            I_mot=8*(rand(Nmot,1)-0.5);
+            
             fired = find(v>=30);                % Indices of fired neurons
             fired_out = find(v(1:numberOfGroups * groupSize)>=30);
             fired_mot = find(v_mot>=30);
@@ -198,7 +198,9 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, dof, muscleScale, y
             % For any presynaptic neuron that just fired, calculate the current to add
             % as proportional to the synaptic strengths from its postsynaptic neurons.
             if proprioception
-                I(1:Ne) = I(1:Ne) + ((2 * mod(ceil((1:Ne) / groupSize), 2) - 1)' .* muscleState(ceil((1:Ne) / (2 * groupSize)), t, sec));
+                receptiveFields = repmat(linspace(-1, 1, 2 * groupSize)', numberOfMuscles, 1);
+                inputValues = muscleState(ceil((1:Ne) / (2 * groupSize)),t,sec);
+                I(1:Ne) = I(1:Ne) + 2 * (0.5 - abs(receptiveFields - inputValues));
             end
             k=size(firings,1);
             while firings(k,1)>t-D
@@ -246,8 +248,8 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, dof, muscleScale, y
                 end
                 for m = 1:numberOfMuscles
                     spikeDelta = groupSpikeCounts(2 * m - 1) - groupSpikeCounts(2 * m);
-                    muscleDelta(m) = muscleSmooth * (muscleScale * spikeDelta - muscleState(m,t,sec));
-                    muscleState(m,t+1,sec) = min(max(muscleState(m,t,sec) + muscleDelta(m), -1), 1);
+                    muscleDelta(m) = muscleDelta(m) + muscleSmooth * (muscleScale * spikeDelta - muscleDelta(m));
+                    muscleState(m,t+1,sec) = min(max(muscleState(m,t,sec) + muscleDelta(m), -1) - 0.01 * muscleState(m,t,sec), 1);
                 end
             end
             
@@ -321,26 +323,27 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, dof, muscleScale, y
                     end
                 elseif strcmp(reinforcer, 'salience')
                     display(['Salience Threshold: ',num2str(salienceThreshold)]);
-                    temprewhist(1:9) = temprewhist(2:10);
+                    %temprewhist(1:9) = temprewhist(2:10);
                     % Reward if the salience of the sound is above
                     % threshold value.
                     if salience > salienceThreshold
                         display('rewarded');
                         rew = [rew, sec * 1000 + t];
                         rewcount = rewcount + 1;
-                        temprewhist(10) = 1;
+                        %temprewhist(10) = 1;
                         % If at least 3 of the last 10 sounds were above
                         % threshold, raise the threshold value and reset the count.
-                        if mean(temprewhist) >= salienceIncrementThreshold
-                            salienceThreshold = salienceThreshold + salienceIncrement;
-                            temprewhist = zeros(1,10);
-                        end
+                        %if mean(temprewhist) >= salienceIncrementThreshold
+                            %salienceThreshold = salienceThreshold + salienceIncrement;
+                            %temprewhist = zeros(1,10);
+                        %end
                     else
                         display('not rewarded');
-                        temprewhist(10) = 0;
+                        %temprewhist(10) = 0;
                     end
-                    display(['temprewhist: ' num2str(temprewhist)]);
-                    display(['mean(temprewhist): ' num2str(mean(temprewhist))]);
+                    salienceThreshold = prctile(salhist(max(1, sec - 30):sec), 75);
+                    %display(['temprewhist: ' num2str(temprewhist)]);
+                    %display(['mean(temprewhist): ' num2str(mean(temprewhist))]);
                 end
 
                 % Display reward count information.
@@ -406,7 +409,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, dof, muscleScale, y
             set(0, 'currentfigure', hSalienceReward);
             set(hSalienceReward, 'name', 'Salience and Reward', 'numbertitle', 'off');
             subplot(2,1,1);
-            plot(50:50:duration, mean(reshape(salhist, 50, duration / 50), 1));
+            plot(1:sec, salhist(1:sec), '.b', 1:sec, smooth(salhist(1:sec), 10), 'k', 'LineWidth', 2);
             xlim([0 sec]);
             title('RMS Auditory Salience by Vocalization', 'fontweight', 'bold');
             ylabel('Salience');
@@ -414,7 +417,7 @@ function [] = babble_daspnet_multi(id, duration, reinforcer, dof, muscleScale, y
             rewards = zeros(duration, 1);
             rewards(ceil(rew / 1000)) = 1;
             plot(50:50:duration, mean(reshape(rewards, 50, duration / 50), 1));
-            xlim([0 sec]);
+            %xlim([0 sec]);
             title('Reward Frequency', 'fontweight', 'bold');
             xlabel('Time (s)');
             ylabel('Proportion of Rewarded Trials');

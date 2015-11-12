@@ -10,8 +10,8 @@ function [] = plot_salience( group_names, group_size, sim_duration, colors )
         group_name = group_names{g};
         salience = [];
         for sim_number = 1:group_size
-            load([group_name '_' num2str(sim_number) '_Workspace/babble_daspnet_multi_' ...
-                group_name '_' num2str(sim_number) '.mat'], 'salhist');
+            load([group_name '_Workspace/babble_daspnet_multi_' ...
+                group_name '.mat'], 'salhist');
             salience = [salience, salhist];
         end
         col = colors(g);

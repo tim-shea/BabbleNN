@@ -48,8 +48,13 @@ function [] = contrastive_hebbian_graspnet(id, duration, target_function, plotOn
     addpath(spkdir);
     workspace = [id '/' id '.mat'];
     
-    inputs = [0 0];
-    targets = 0;
+    inputs = zeros(1000, 2);
+    target = zeros(1000, 1);
+    output = zeros(1000, 1);
+    
+    inRates = zeros(1000, 2);
+    targetRate = zeros(1000, 1);
+    outputRate = zeros(1000, 1);
     
     % Set time scales of membrane recovery variable
     aIn = 0.02;
@@ -102,9 +107,9 @@ function [] = contrastive_hebbian_graspnet(id, duration, target_function, plotOn
             ITrg = 10 * (rand(NTrg, 1) - 0.5);
             
             % Indices of fired neurons
-            firedIn = find(vIn >= 30);
-            firedOut = find(vOut >= 30);
-            firedTrg = find(vTrg >= 30);
+            firedIn = find(vIn > 30);
+            firedOut = find(vOut > 30);
+            firedTrg = find(vTrg > 30);
             
             % Reset the voltages for those neurons that fired
             vIn(firedIn) = -65;
@@ -135,22 +140,31 @@ function [] = contrastive_hebbian_graspnet(id, duration, target_function, plotOn
             spikesTrg = [spikesTrg; t * ones(length(firedTrg), 1), firedTrg];
             
             % Add input and target currents
-            if strcmp(target_function, 'xor')
-                %inputs = mod((sec * 1000 + t) / 400, 1.0) * ones(NExc, 1);
-                if mod(t, 250) == 0
-                    inputs = [round(rand()), round(rand())];
+            inRates(t,:) = [sum(firedIn <= NIn / 2), sum(firedIn > NIn / 2)];
+            targetRate(t) = size(firedTrg, 1);
+            outputRate(t) = size(firedOut, 1);
+            if strcmp(target_function, 'and')
+                if mod(t, 250) == 1
+                    inputs(t:t + 249,1) = round(rand());
+                    inputs(t:t + 249,2) = round(rand());
                 end
-                targets = [xor(inputs(1), inputs(2)), not(xor(inputs(1), inputs(2)))];
+                target(t) = and(inputs(t,1), ~inputs(t,2));
                 
-                inputResponses = [inputs(1) * ones(NIn / 2, 1); inputs(2) * ones(NIn / 2, 1)];
-                targetResponses = [targets(1) * ones(NTrg / 2, 1); targets(2) * ones(NTrg / 2, 1)];
+                inputResponses = [inputs(t,1) * ones(NIn / 2, 1); inputs(t,2) * ones(NIn / 2, 1)];
+                targetResponses = target(t) * ones(NTrg, 1);
                 
-                %function currents = continuous_response(value, rows, sharpness)
-                %    responses = sharpness * max(0, (1 / sharpness) - abs((1:rows)' / rows - value));
-                %end
+                IIn = (10 + 5 * inputResponses) .* (rand(NIn, 1) - 0.5);
+                ITrg = (10 + 5 * targetResponses) .* (rand(NTrg, 1) - 0.5);
+            elseif strcmp(target_function, '1DoFPredict')
+                %target(t) = 
+                output(t) = sum(firedOut) / NOut;
+                inputs(t,:) = [inputs(t,1) + 0.1 * rand(), output(t)];
                 
-                IIn(1:NIn) = (10 + 5 * inputResponses) .* (rand(NIn, 1) - 0.5);
-                ITrg(1:NTrg) = (10 + 5 * targetResponses) .* (rand(NTrg, 1) - 0.5);
+                inputResponses = [inputs(t,1) * ones(NIn / 2, 1); inputs(t,2) * ones(NIn / 2, 1)];
+                targetResponses = zeros(NTrg, 1);
+                
+                IIn = (10 + 5 * inputResponses) .* (rand(NIn, 1) - 0.5);
+                ITrg = (10 + 5 * targetResponses) .* (rand(NTrg, 1) - 0.5);
             end
             
             % Calculate post synaptic conductances
@@ -204,12 +218,20 @@ function [] = contrastive_hebbian_graspnet(id, duration, target_function, plotOn
         % Plot spikes and synapses
         if plotOn
             set(0, 'currentfigure', hNetworkActivity);
-            set(hNetworkActivity, 'name', ['Neural Spiking for Second: ', num2str(sec)], 'numbertitle', 'off');
+            set(hNetworkActivity, 'name', ['Model activity for trial ', num2str(sec)], 'numbertitle', 'off');
+            subplot(2, 1, 1);
             plot([spikesIn(:,1); spikesOut(:,1); spikesTrg(:,1)], ...
                 [spikesIn(:,2); (spikesOut(:,2) + NIn); (spikesTrg(:,2) + NIn + NOut)], '.');
             title('Spike Raster Plot', 'fontweight', 'bold');
             axis([0 1000 0 NIn + NOut + NTrg]);
+            xlabel('Time (ms)');
             ylabel('Neuron Index');
+            subplot(2, 1, 2);
+            plot(1:1000, smooth(inRates(:,1), 20), 'c', 1:1000, smooth(inRates(:,2), 20), 'm', ...
+                 1:1000, smooth(targetRate, 20), 'r', 1:1000, smooth(outputRate, 20), 'k');
+            %plot(1:1000, inputs(:,1), 'r', 1:1000, inputs(:,2), 'g', 1:1000, output, 'b');
+            xlabel('Time (ms)')
+            ylabel('Value');
             
             set(0, 'currentfigure', hSynapseMatrix);
             set(hSynapseMatrix, 'name', ['Synaptic Strengths for Second: ', num2str(sec)], 'numbertitle', 'off');
