@@ -11,6 +11,6 @@ The model is derived from the following work:
 
 A. S. Warlaumont, “Salience-based reinforcement of a spiking neural network leads to increased syllable production,” in IEEE International Conference on Development and Learning and Epigenetic Robotics (ICDL), 2013.
 
-E. M. Izhikevich, “Solving the distal reward problem through linkage of STDP and dopamine signaling,” Cerebral Cortex, vol. 17, no. 10, pp. 2443–2452, 2007. Code available at http://izhikevich.org/publications/dastdp.htm
+E. M. Izhikevich, “Solving the distal reward problem through linkage of STDP and dopamine signaling,” Cerebral Cortex, vol. 17, no. 10, pp. 2443–2452, 2007.
 
 M. Coath, S. L. Denham, L. Smith, H. Honing, A. Hazan, P. Holonwicz, and H. Purwins, “An auditory model for the detection of perceptual onsets and beat tracking in singing,” in Neural Information Processing Systems, Workshop on Music Processing in the Brain, 2007.
